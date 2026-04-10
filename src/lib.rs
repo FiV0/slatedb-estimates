@@ -1,0 +1,1 @@
+//! SlateDB estimates library.
