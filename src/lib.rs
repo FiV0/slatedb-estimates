@@ -189,7 +189,7 @@ mod tests {
         let end = index[2].1.clone();
 
         let expected = scan_count(&db, start.clone()..end.clone()).await;
-        let range_stats = RangeStats::new(db, path, object_store, None, None);
+        let range_stats = RangeStats::new(Arc::new(db), path, object_store, None, None);
 
         let count = range_stats.estimate_key_count(start..end).await.unwrap();
         assert_eq!(count, expected);
@@ -219,9 +219,15 @@ mod tests {
         let db_one = build_seeded_db(path_one, Arc::clone(&store_one), 18, 2).await;
         let db_two = build_seeded_db(path_two, Arc::clone(&store_two), 18, 2).await;
 
-        let with_new = RangeStats::new(db_one, path_one, Arc::clone(&store_one), None, None);
+        let with_new = RangeStats::new(
+            Arc::new(db_one),
+            path_one,
+            Arc::clone(&store_one),
+            None,
+            None,
+        );
         let reader = SstReader::new(path_two, Arc::clone(&store_two), None, None);
-        let with_parts = RangeStats::from_db_parts(db_two, reader);
+        let with_parts = RangeStats::from_db_parts(Arc::new(db_two), reader);
 
         let range = Bytes::from_static(b"k03")..Bytes::from_static(b"k17");
         let opts = SizeApproximationOptions::default();
@@ -253,7 +259,8 @@ mod tests {
             Bytes::from_static(b"k00")..Bytes::from(b"zzz".to_vec()),
         )
         .await;
-        let range_stats = RangeStats::new(db, path, Arc::clone(&object_store), None, None);
+        let range_stats =
+            RangeStats::new(Arc::new(db), path, Arc::clone(&object_store), None, None);
         (range_stats, object_store, expected_full)
     }
 

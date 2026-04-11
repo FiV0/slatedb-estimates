@@ -12,13 +12,13 @@ use slatedb::{BlockTransformer, SstReader};
 use crate::SizeApproximationOptions;
 
 pub struct RangeStats {
-    db: slatedb::Db,
+    db: Arc<slatedb::Db>,
     sst_reader: SstReader,
 }
 
 impl RangeStats {
     pub fn new<P: Into<Path>>(
-        db: slatedb::Db,
+        db: Arc<slatedb::Db>,
         path: P,
         object_store: Arc<dyn ObjectStore>,
         cache: Option<Arc<dyn slatedb::db_cache::DbCache>>,
@@ -28,7 +28,7 @@ impl RangeStats {
         Self::from_db_parts(db, sst_reader)
     }
 
-    pub fn from_db_parts(db: slatedb::Db, sst_reader: SstReader) -> Self {
+    pub fn from_db_parts(db: Arc<slatedb::Db>, sst_reader: SstReader) -> Self {
         Self { db, sst_reader }
     }
 
