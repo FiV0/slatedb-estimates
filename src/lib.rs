@@ -24,9 +24,14 @@ impl Default for SizeApproximationOptions {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::time::Duration;
 
     use slatedb::bytes::Bytes;
-    use slatedb::config::{FlushOptions, FlushType, SstBlockSize};
+    use slatedb::compactor::{
+        CompactionScheduler, CompactionSchedulerSupplier, CompactionSpec, CompactorBuilder,
+        CompactorStateView, SourceId,
+    };
+    use slatedb::config::{CompactorOptions, FlushOptions, FlushType, Settings, SstBlockSize};
     use slatedb::object_store::memory::InMemory;
     use slatedb::{Db, ErrorKind, SstReader};
 
@@ -211,6 +216,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn estimate_key_count_is_a_storage_level_estimate_for_overlapping_l0() {
+        let path = "/keycount-overlapping-l0";
+        let object_store: Arc<dyn slatedb::object_store::ObjectStore> = Arc::new(InMemory::new());
+        let db = Db::builder(path, Arc::clone(&object_store))
+            .with_sst_block_size(SstBlockSize::Block1Kib)
+            .build()
+            .await
+            .unwrap();
+
+        db.put(b"k", b"value-0").await.unwrap();
+        flush_memtable(&db).await;
+        db.put(b"k", b"value-1").await.unwrap();
+        flush_memtable(&db).await;
+        db.delete(b"k").await.unwrap();
+        flush_memtable(&db).await;
+
+        let scan_count = scan_count(&db, Bytes::from_static(b"k")..Bytes::from_static(b"l")).await;
+        let range_stats = RangeStats::new(Arc::new(db), path, object_store, None, None);
+        let estimated = range_stats
+            .estimate_key_count(Bytes::from_static(b"k")..Bytes::from_static(b"l"))
+            .await
+            .unwrap();
+
+        assert_eq!(scan_count, 0);
+        assert_eq!(estimated, 2);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn estimate_key_count_matches_scan_for_compacted_put_only_data() {
+        let path = "/keycount-compacted";
+        let object_store: Arc<dyn slatedb::object_store::ObjectStore> = Arc::new(InMemory::new());
+        let db = Db::builder(path, Arc::clone(&object_store))
+            .with_settings(compacting_settings())
+            .with_compactor_builder(
+                CompactorBuilder::new(path, Arc::clone(&object_store))
+                    .with_options(compactor_options())
+                    .with_scheduler_supplier(Arc::new(CompactL0AfterTwoSchedulerSupplier)),
+            )
+            .with_sst_block_size(SstBlockSize::Block1Kib)
+            .build()
+            .await
+            .unwrap();
+
+        for i in 0..24 {
+            let key = format!("k{i:02}");
+            let value = format!("value-{i:02}-{}", "x".repeat(192));
+            db.put(key.as_bytes(), value.as_bytes()).await.unwrap();
+
+            if i == 11 {
+                flush_memtable(&db).await;
+            }
+        }
+        flush_memtable(&db).await;
+        wait_for_compaction(&db).await;
+
+        let manifest = db.manifest();
+        assert!(manifest.l0.is_empty());
+        assert!(!manifest.compacted.is_empty());
+
+        let range = Bytes::from_static(b"k00")..Bytes::from_static(b"k24");
+        let expected = scan_count(&db, range.clone()).await;
+        let range_stats = RangeStats::new(Arc::new(db), path, object_store, None, None);
+
+        let estimated = range_stats.estimate_key_count(range).await.unwrap();
+        assert_eq!(estimated, expected);
+    }
+
+    #[tokio::test]
     async fn constructors_produce_identical_results() {
         let path_one = "/constructors-one";
         let path_two = "/constructors-two";
@@ -283,23 +356,85 @@ mod tests {
             db.put(key.as_bytes(), value.as_bytes()).await.unwrap();
 
             if (i + 1) % chunk == 0 {
-                db.flush_with_options(FlushOptions {
-                    flush_type: FlushType::MemTable,
-                })
-                .await
-                .unwrap();
+                flush_memtable(&db).await;
             }
         }
 
         if chunk == 0 || key_count % chunk != 0 {
-            db.flush_with_options(FlushOptions {
-                flush_type: FlushType::MemTable,
-            })
-            .await
-            .unwrap();
+            flush_memtable(&db).await;
         }
 
         db
+    }
+
+    async fn flush_memtable(db: &Db) {
+        db.flush_with_options(FlushOptions {
+            flush_type: FlushType::MemTable,
+        })
+        .await
+        .unwrap();
+    }
+
+    fn compacting_settings() -> Settings {
+        Settings {
+            flush_interval: Some(Duration::from_millis(10)),
+            compactor_options: None,
+            garbage_collector_options: None,
+            ..Settings::default()
+        }
+    }
+
+    fn compactor_options() -> CompactorOptions {
+        CompactorOptions {
+            poll_interval: Duration::from_millis(10),
+            max_concurrent_compactions: 1,
+            ..CompactorOptions::default()
+        }
+    }
+
+    async fn wait_for_compaction(db: &Db) {
+        tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                let manifest = db.manifest();
+                if manifest.l0.is_empty() && !manifest.compacted.is_empty() {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("timed out waiting for compaction");
+    }
+
+    struct CompactL0AfterTwoSchedulerSupplier;
+
+    impl CompactionSchedulerSupplier for CompactL0AfterTwoSchedulerSupplier {
+        fn compaction_scheduler(
+            &self,
+            _options: &CompactorOptions,
+        ) -> Box<dyn CompactionScheduler + Send + Sync> {
+            Box::new(CompactL0AfterTwoScheduler)
+        }
+    }
+
+    struct CompactL0AfterTwoScheduler;
+
+    impl CompactionScheduler for CompactL0AfterTwoScheduler {
+        fn propose(&self, state: &CompactorStateView) -> Vec<CompactionSpec> {
+            let manifest = state.manifest();
+            if manifest.l0.len() < 2 {
+                return Vec::new();
+            }
+
+            let sources = manifest
+                .l0
+                .iter()
+                .map(|view| SourceId::SstView(view.id))
+                .collect();
+            let destination = manifest.compacted.first().map_or(0, |run| run.id + 1);
+
+            vec![CompactionSpec::new(sources, destination)]
+        }
     }
 
     async fn scan_count<T>(db: &Db, range: T) -> u64

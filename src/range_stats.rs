@@ -86,6 +86,13 @@ impl RangeStats {
         Ok(total)
     }
 
+    /// Estimates key entries in `range` from SST-level statistics.
+    ///
+    /// This is a storage-level best-effort estimate. It sums per-SST net
+    /// `puts + merges - deletes` for the touched files or blocks and does not
+    /// reconcile overlapping L0 files the way a SlateDB scan does. A range that
+    /// covers un-compacted updates or tombstones can count obsolete versions or
+    /// deleted keys.
     pub async fn estimate_key_count<K, T>(&self, range: T) -> Result<u64, slatedb::Error>
     where
         K: AsRef<[u8]> + Send,
