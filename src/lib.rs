@@ -327,11 +327,8 @@ mod tests {
     ) -> (RangeStats, Arc<dyn slatedb::object_store::ObjectStore>, u64) {
         let object_store: Arc<dyn slatedb::object_store::ObjectStore> = Arc::new(InMemory::new());
         let db = build_seeded_db(path, Arc::clone(&object_store), key_count, flushes).await;
-        let expected_full = scan_count(
-            &db,
-            Bytes::from_static(b"k00")..Bytes::from(b"zzz".to_vec()),
-        )
-        .await;
+        let expected_full =
+            scan_count(&db, Bytes::from_static(b"k00")..Bytes::from_static(b"zzz")).await;
         let range_stats =
             RangeStats::new(Arc::new(db), path, Arc::clone(&object_store), None, None);
         (range_stats, object_store, expected_full)

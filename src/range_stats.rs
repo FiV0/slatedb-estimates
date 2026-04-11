@@ -259,34 +259,33 @@ fn touched_block_span(index: &[(u64, Bytes)], range: &OwnedRange) -> Option<(usi
         return None;
     }
 
-    let first_keys: Vec<&Bytes> = index.iter().map(|(_, key)| key).collect();
-    let start_idx = start_block_index(&first_keys, &range.0);
-    let end_idx = end_block_index(&first_keys, &range.1)?;
+    let start_idx = start_block_index(index, &range.0);
+    let end_idx = end_block_index(index, &range.1)?;
     if start_idx > end_idx || start_idx >= index.len() {
         return None;
     }
     Some((start_idx, end_idx.min(index.len() - 1)))
 }
 
-fn start_block_index(first_keys: &[&Bytes], start: &Bound<Bytes>) -> usize {
+fn start_block_index(index: &[(u64, Bytes)], start: &Bound<Bytes>) -> usize {
     match start {
         Unbounded => 0,
         Included(key) | Excluded(key) => {
-            let idx = first_keys.partition_point(|candidate| *candidate <= key);
+            let idx = index.partition_point(|(_, candidate)| candidate <= key);
             idx.saturating_sub(1)
         }
     }
 }
 
-fn end_block_index(first_keys: &[&Bytes], end: &Bound<Bytes>) -> Option<usize> {
+fn end_block_index(index: &[(u64, Bytes)], end: &Bound<Bytes>) -> Option<usize> {
     match end {
-        Unbounded => Some(first_keys.len().saturating_sub(1)),
+        Unbounded => Some(index.len().saturating_sub(1)),
         Included(key) => {
-            let idx = first_keys.partition_point(|candidate| *candidate <= key);
+            let idx = index.partition_point(|(_, candidate)| candidate <= key);
             idx.checked_sub(1)
         }
         Excluded(key) => {
-            let idx = first_keys.partition_point(|candidate| *candidate < key);
+            let idx = index.partition_point(|(_, candidate)| candidate < key);
             idx.checked_sub(1)
         }
     }
@@ -298,8 +297,8 @@ fn net_count(puts: u64, deletes: u64, merges: u64) -> u64 {
 
 fn format_sst_id(view: &SsTableView) -> String {
     match view.sst.id {
-        SsTableId::Compacted(id) => id.to_string(),
-        SsTableId::Wal(id) => id.to_string(),
+        SsTableId::Compacted(id) => format!("compacted-{id}"),
+        SsTableId::Wal(id) => format!("wal-{id}"),
     }
 }
 
