@@ -11,6 +11,8 @@ use slatedb::{BlockTransformer, SstReader};
 
 use crate::SizeApproximationOptions;
 
+type OwnedRange = (Bound<Bytes>, Bound<Bytes>);
+
 pub struct RangeStats {
     db: Arc<slatedb::Db>,
     sst_reader: SstReader,
@@ -43,8 +45,8 @@ impl RangeStats {
     {
         validate_size_options(opts)?;
 
-        let query = KeyRange::from_range(&range);
-        if query.is_empty() {
+        let query = owned_range_from_range(&range);
+        if range_is_empty(&query) {
             return Ok(0);
         }
 
@@ -89,8 +91,8 @@ impl RangeStats {
         K: AsRef<[u8]> + Send,
         T: RangeBounds<K> + Send,
     {
-        let query = KeyRange::from_range(&range);
-        if query.is_empty() {
+        let query = owned_range_from_range(&range);
+        if range_is_empty(&query) {
             return Ok(0);
         }
 
@@ -146,7 +148,7 @@ impl RangeStats {
     async fn estimate_view_size(
         &self,
         view: &SsTableView,
-        overlap: &KeyRange,
+        overlap: &OwnedRange,
     ) -> Result<u64, slatedb::Error> {
         let sst_file = self.sst_reader.open_with_handle(view.sst.clone())?;
         let index = sst_file.index().await?;
@@ -173,7 +175,7 @@ impl RangeStats {
 #[derive(Clone, Debug)]
 struct Candidate {
     view: SsTableView,
-    overlap: KeyRange,
+    overlap: OwnedRange,
     requires_refinement: bool,
 }
 
@@ -197,7 +199,7 @@ fn validate_size_options(opts: &SizeApproximationOptions) -> Result<(), slatedb:
     Ok(())
 }
 
-fn collect_candidates(manifest: ManifestCore, query: &KeyRange) -> Vec<Candidate> {
+fn collect_candidates(manifest: ManifestCore, query: &OwnedRange) -> Vec<Candidate> {
     let mut candidates = Vec::new();
 
     for view in manifest.l0 {
@@ -207,7 +209,7 @@ fn collect_candidates(manifest: ManifestCore, query: &KeyRange) -> Vec<Candidate
     }
 
     for sorted_run in manifest.compacted {
-        for view in sorted_run.tables_covering_range((query.start.clone(), query.end.clone())) {
+        for view in sorted_run.tables_covering_range(query.clone()) {
             if let Some(candidate) = build_candidate(view.clone(), query) {
                 candidates.push(candidate);
             }
@@ -217,11 +219,11 @@ fn collect_candidates(manifest: ManifestCore, query: &KeyRange) -> Vec<Candidate
     candidates
 }
 
-fn build_candidate(view: SsTableView, query: &KeyRange) -> Option<Candidate> {
+fn build_candidate(view: SsTableView, query: &OwnedRange) -> Option<Candidate> {
     let logical = logical_view_range(&view)?;
-    let overlap = logical.intersection(query)?;
+    let overlap = range_intersection(&logical, query)?;
     let projected = view.visible_range().is_some();
-    let requires_refinement = projected || !query.contains(&logical);
+    let requires_refinement = projected || !range_contains(query, &logical);
     Some(Candidate {
         view,
         overlap,
@@ -229,33 +231,30 @@ fn build_candidate(view: SsTableView, query: &KeyRange) -> Option<Candidate> {
     })
 }
 
-fn logical_view_range(view: &SsTableView) -> Option<KeyRange> {
+fn logical_view_range(view: &SsTableView) -> Option<OwnedRange> {
     let start = Included(view.sst.info.first_entry.clone()?);
     let end = match &view.sst.info.last_entry {
         Some(last) => Included(last.clone()),
         None => Unbounded,
     };
 
-    let physical = KeyRange { start, end };
+    let physical = (start, end);
     if let Some(visible) = view.visible_range() {
-        let visible = KeyRange {
-            start: visible.start_bound().cloned(),
-            end: visible.end_bound().cloned(),
-        };
-        physical.intersection(&visible)
+        let visible = (visible.start_bound().cloned(), visible.end_bound().cloned());
+        range_intersection(&physical, &visible)
     } else {
         Some(physical)
     }
 }
 
-fn touched_block_span(index: &[(u64, Bytes)], range: &KeyRange) -> Option<(usize, usize)> {
+fn touched_block_span(index: &[(u64, Bytes)], range: &OwnedRange) -> Option<(usize, usize)> {
     if index.is_empty() {
         return None;
     }
 
     let first_keys: Vec<&Bytes> = index.iter().map(|(_, key)| key).collect();
-    let start_idx = start_block_index(&first_keys, &range.start);
-    let end_idx = end_block_index(&first_keys, &range.end)?;
+    let start_idx = start_block_index(&first_keys, &range.0);
+    let end_idx = end_block_index(&first_keys, &range.1)?;
     if start_idx > end_idx || start_idx >= index.len() {
         return None;
     }
@@ -304,44 +303,37 @@ fn missing_sst_stats_error(view: &SsTableView) -> slatedb::Error {
     ))
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct KeyRange {
-    start: Bound<Bytes>,
-    end: Bound<Bytes>,
+fn owned_range_from_range<K, T>(range: &T) -> OwnedRange
+where
+    K: AsRef<[u8]> + Send,
+    T: RangeBounds<K> + Send,
+{
+    (
+        clone_bound(range.start_bound()),
+        clone_bound(range.end_bound()),
+    )
 }
 
-impl KeyRange {
-    fn from_range<K, T>(range: &T) -> Self
-    where
-        K: AsRef<[u8]> + Send,
-        T: RangeBounds<K> + Send,
-    {
-        Self {
-            start: clone_bound(range.start_bound()),
-            end: clone_bound(range.end_bound()),
-        }
+fn range_is_empty(range: &OwnedRange) -> bool {
+    match (&range.0, &range.1) {
+        (Unbounded, _) | (_, Unbounded) => false,
+        (Included(start), Included(end)) => start > end,
+        (Included(start), Excluded(end))
+        | (Excluded(start), Included(end))
+        | (Excluded(start), Excluded(end)) => start >= end,
     }
+}
 
-    fn is_empty(&self) -> bool {
-        match (&self.start, &self.end) {
-            (Unbounded, _) | (_, Unbounded) => false,
-            (Included(start), Included(end)) => start > end,
-            (Included(start), Excluded(end))
-            | (Excluded(start), Included(end))
-            | (Excluded(start), Excluded(end)) => start >= end,
-        }
-    }
+fn range_intersection(left: &OwnedRange, right: &OwnedRange) -> Option<OwnedRange> {
+    let range = (
+        max_start_bound(&left.0, &right.0),
+        min_end_bound(&left.1, &right.1),
+    );
+    (!range_is_empty(&range)).then_some(range)
+}
 
-    fn intersection(&self, other: &Self) -> Option<Self> {
-        let start = max_start_bound(&self.start, &other.start);
-        let end = min_end_bound(&self.end, &other.end);
-        let range = Self { start, end };
-        (!range.is_empty()).then_some(range)
-    }
-
-    fn contains(&self, other: &Self) -> bool {
-        self.intersection(other).as_ref() == Some(other)
-    }
+fn range_contains(container: &OwnedRange, contained: &OwnedRange) -> bool {
+    range_intersection(container, contained).as_ref() == Some(contained)
 }
 
 fn clone_bound<K: AsRef<[u8]>>(bound: Bound<&K>) -> Bound<Bytes> {
