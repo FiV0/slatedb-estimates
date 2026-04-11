@@ -2,8 +2,6 @@
 
 mod range_stats;
 
-use thiserror::Error as ThisError;
-
 pub use crate::range_stats::RangeStats;
 
 #[derive(Debug, Clone)]
@@ -23,24 +21,6 @@ impl Default for SizeApproximationOptions {
     }
 }
 
-#[derive(Debug, ThisError)]
-pub enum Error {
-    #[error(transparent)]
-    SlateDb(#[from] slatedb::Error),
-
-    #[error("include_memtables is not supported yet")]
-    MemtablesUnsupported,
-
-    #[error("at least one of include_memtables or include_files must be true")]
-    NoSourcesEnabled,
-
-    #[error("error_margin must be in the range [0.0, 1.0], got {0}")]
-    InvalidErrorMargin(f64),
-
-    #[error("cannot estimate key count because SST {0} has no stats block")]
-    MissingSstStats(String),
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -48,9 +28,9 @@ mod tests {
     use slatedb::bytes::Bytes;
     use slatedb::config::{FlushOptions, FlushType, SstBlockSize};
     use slatedb::object_store::memory::InMemory;
-    use slatedb::{Db, SstReader};
+    use slatedb::{Db, ErrorKind, SstReader};
 
-    use super::{Error, RangeStats, SizeApproximationOptions};
+    use super::{RangeStats, SizeApproximationOptions};
 
     #[tokio::test]
     async fn approximate_size_returns_zero_for_missing_range() {
@@ -84,7 +64,8 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert!(matches!(err, Error::NoSourcesEnabled));
+        assert_eq!(err.kind(), ErrorKind::Invalid);
+        assert!(err.to_string().contains("at least one"));
     }
 
     #[tokio::test]
@@ -104,7 +85,8 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert!(matches!(err, Error::MemtablesUnsupported));
+        assert_eq!(err.kind(), ErrorKind::Invalid);
+        assert!(err.to_string().contains("include_memtables"));
     }
 
     #[tokio::test]
@@ -124,7 +106,8 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert!(matches!(err, Error::InvalidErrorMargin(value) if value == 1.5));
+        assert_eq!(err.kind(), ErrorKind::Invalid);
+        assert!(err.to_string().contains("1.5"));
     }
 
     #[tokio::test]

@@ -9,7 +9,7 @@ use slatedb::object_store::ObjectStore;
 use slatedb::object_store::path::Path;
 use slatedb::{BlockTransformer, SstReader};
 
-use crate::{Error, SizeApproximationOptions};
+use crate::SizeApproximationOptions;
 
 pub struct RangeStats {
     db: slatedb::Db,
@@ -36,7 +36,7 @@ impl RangeStats {
         &self,
         range: T,
         opts: &SizeApproximationOptions,
-    ) -> Result<u64, Error>
+    ) -> Result<u64, slatedb::Error>
     where
         K: AsRef<[u8]> + Send,
         T: RangeBounds<K> + Send,
@@ -84,7 +84,7 @@ impl RangeStats {
         Ok(total)
     }
 
-    pub async fn estimate_key_count<K, T>(&self, range: T) -> Result<u64, Error>
+    pub async fn estimate_key_count<K, T>(&self, range: T) -> Result<u64, slatedb::Error>
     where
         K: AsRef<[u8]> + Send,
         T: RangeBounds<K> + Send,
@@ -107,7 +107,7 @@ impl RangeStats {
             let stats = sst_file
                 .stats()
                 .await?
-                .ok_or_else(|| Error::MissingSstStats(format_sst_id(&candidate.view)))?;
+                .ok_or_else(|| missing_sst_stats_error(&candidate.view))?;
 
             if !candidate.requires_refinement {
                 total = total.saturating_add(net_count(
@@ -147,7 +147,7 @@ impl RangeStats {
         &self,
         view: &SsTableView,
         overlap: &KeyRange,
-    ) -> Result<u64, Error> {
+    ) -> Result<u64, slatedb::Error> {
         let sst_file = self.sst_reader.open_with_handle(view.sst.clone())?;
         let index = sst_file.index().await?;
         if index.is_empty() {
@@ -177,15 +177,22 @@ struct Candidate {
     requires_refinement: bool,
 }
 
-fn validate_size_options(opts: &SizeApproximationOptions) -> Result<(), Error> {
+fn validate_size_options(opts: &SizeApproximationOptions) -> Result<(), slatedb::Error> {
     if !opts.include_memtables && !opts.include_files {
-        return Err(Error::NoSourcesEnabled);
+        return Err(slatedb::Error::invalid(
+            "at least one of include_memtables or include_files must be true".to_string(),
+        ));
     }
     if !opts.error_margin.is_finite() || !(0.0..=1.0).contains(&opts.error_margin) {
-        return Err(Error::InvalidErrorMargin(opts.error_margin));
+        return Err(slatedb::Error::invalid(format!(
+            "error_margin must be in the range [0.0, 1.0], got {}",
+            opts.error_margin
+        )));
     }
     if opts.include_memtables {
-        return Err(Error::MemtablesUnsupported);
+        return Err(slatedb::Error::invalid(
+            "include_memtables is not supported yet".to_string(),
+        ));
     }
     Ok(())
 }
@@ -288,6 +295,13 @@ fn format_sst_id(view: &SsTableView) -> String {
         SsTableId::Compacted(id) => id.to_string(),
         SsTableId::Wal(id) => id.to_string(),
     }
+}
+
+fn missing_sst_stats_error(view: &SsTableView) -> slatedb::Error {
+    slatedb::Error::data(format!(
+        "cannot estimate key count because SST {} has no stats block",
+        format_sst_id(view)
+    ))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
