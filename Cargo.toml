@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-slatedb = { git = "https://github.com/slatedb/slatedb.git", rev = "46543bff2c577440e2daf2315cf926671cb9cc5e", default-features = false }
+slatedb = { version = "0.12.0", default-features = false }
 thiserror = "1.0"
 
 [dev-dependencies]

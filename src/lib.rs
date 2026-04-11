@@ -18,7 +18,7 @@ impl Default for SizeApproximationOptions {
         Self {
             include_memtables: false,
             include_files: true,
-            error_margin: 0.0,
+            error_margin: 0.10,
         }
     }
 }
