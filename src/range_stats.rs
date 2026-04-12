@@ -19,6 +19,7 @@ pub struct RangeStats {
 }
 
 impl RangeStats {
+    /// The `cache` argument controls index/stats block caching; the cache is not read from `db`.
     pub fn new<P: Into<Path>>(
         db: Arc<slatedb::Db>,
         path: P,
