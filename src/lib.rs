@@ -320,6 +320,51 @@ mod tests {
         assert_eq!(count_one, count_two);
     }
 
+    #[tokio::test]
+    async fn approximate_size_with_prefix_matches_range_equivalent() {
+        let (range_stats, _, _) = seeded_stats("/size-prefix", 20, 2).await;
+        let opts = SizeApproximationOptions::default();
+
+        let prefix_result = range_stats
+            .get_approximate_size_with_prefix(b"k0", &opts)
+            .await
+            .unwrap();
+        let range_result = range_stats
+            .get_approximate_size(Bytes::from_static(b"k0")..Bytes::from_static(b"k1"), &opts)
+            .await
+            .unwrap();
+
+        assert_eq!(prefix_result, range_result);
+    }
+
+    #[tokio::test]
+    async fn estimate_key_count_with_prefix_matches_range_equivalent() {
+        let (range_stats, _, _) = seeded_stats("/keycount-prefix", 20, 2).await;
+
+        let prefix_result = range_stats
+            .estimate_key_count_with_prefix(b"k0")
+            .await
+            .unwrap();
+        let range_result = range_stats
+            .estimate_key_count(Bytes::from_static(b"k0")..Bytes::from_static(b"k1"))
+            .await
+            .unwrap();
+
+        assert_eq!(prefix_result, range_result);
+    }
+
+    #[tokio::test]
+    async fn prefix_methods_handle_empty_prefix() {
+        let (range_stats, _, expected_full) = seeded_stats("/prefix-empty", 12, 1).await;
+
+        let count = range_stats
+            .estimate_key_count_with_prefix(b"")
+            .await
+            .unwrap();
+
+        assert_eq!(count, expected_full);
+    }
+
     async fn seeded_stats(
         path: &'static str,
         key_count: usize,
