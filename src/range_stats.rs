@@ -35,6 +35,23 @@ impl RangeStats {
         Self { db, sst_reader }
     }
 
+    pub async fn get_approximate_size_with_prefix<P: AsRef<[u8]> + Send>(
+        &self,
+        prefix: P,
+        opts: &SizeApproximationOptions,
+    ) -> Result<u64, slatedb::Error> {
+        let range = prefix_to_range(prefix.as_ref());
+        self.get_approximate_size::<Bytes, _>(range, opts).await
+    }
+
+    pub async fn estimate_key_count_with_prefix<P: AsRef<[u8]> + Send>(
+        &self,
+        prefix: P,
+    ) -> Result<u64, slatedb::Error> {
+        let range = prefix_to_range(prefix.as_ref());
+        self.estimate_key_count::<Bytes, _>(range).await
+    }
+
     pub async fn get_approximate_size<K, T>(
         &self,
         range: T,
@@ -380,6 +397,29 @@ fn compare_start_bounds(left: &Bound<Bytes>, right: &Bound<Bytes>) -> Ordering {
             ordering => ordering,
         },
     }
+}
+
+fn prefix_to_range(prefix: &[u8]) -> OwnedRange {
+    if prefix.is_empty() {
+        return (Unbounded, Unbounded);
+    }
+    let start = Included(Bytes::copy_from_slice(prefix));
+    let end = increment_prefix(prefix).map(Excluded).unwrap_or(Unbounded);
+    (start, end)
+}
+
+// Returns the smallest byte string lexicographically greater than any key
+// starting with `prefix`. Returns `None` when `prefix` is all `0xff`.
+fn increment_prefix(prefix: &[u8]) -> Option<Bytes> {
+    let mut upper_bound = prefix.to_vec();
+    for i in (0..upper_bound.len()).rev() {
+        if upper_bound[i] != u8::MAX {
+            upper_bound[i] += 1;
+            upper_bound.truncate(i + 1);
+            return Some(Bytes::from(upper_bound));
+        }
+    }
+    None
 }
 
 fn compare_end_bounds(left: &Bound<Bytes>, right: &Bound<Bytes>) -> Ordering {
