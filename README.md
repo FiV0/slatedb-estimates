@@ -43,7 +43,8 @@ async fn main() {
     // Write some data and flush to SSTs.
     ...
 
-    // Construct a RangeStats object from a db and object_storage, with optional cache and block_transformer
+    // Construct a RangeStats object from a db and object_storage
+    // with optional cache and block_transformer
     let range_stats = RangeStats::new(Arc::new(db), "/example", object_store, None, None);
     let opts = SizeApproximationOptions {
         error_margin: 0.1,
