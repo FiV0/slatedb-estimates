@@ -41,34 +41,26 @@ async fn main() {
         .unwrap();
 
     // Write some data and flush to SSTs.
-    for i in 0..20 {
-        let key = format!("k{i:02}");
-        let value = format!("value-{i:02}");
-        db.put(key.as_bytes(), value.as_bytes()).await.unwrap();
-    }
-    db.flush_with_options(FlushOptions {
-        flush_type: FlushType::MemTable,
-    })
-    .await
-    .unwrap();
+    ...
 
+    // Construct a RangeStats object from a db and object_storage, with optional cache and block_transformer
     let range_stats = RangeStats::new(Arc::new(db), "/example", object_store, None, None);
     let opts = SizeApproximationOptions {
         error_margin: 0.1,
         ..Default::default()
     };
 
+    // Approximate size for a key range
     let size = range_stats
         .get_approximate_size(Bytes::from_static(b"k05")..Bytes::from_static(b"k15"), &opts)
         .await
         .unwrap();
-    println!("approximate size: {size} bytes");
 
+    // Approximate key count for a key range
     let count = range_stats
         .estimate_key_count(Bytes::from_static(b"k05")..Bytes::from_static(b"k15"))
         .await
         .unwrap();
-    println!("estimated key count: {count}");
 }
 ```
 
