@@ -10,6 +10,8 @@ A small Rust library that builds approximate range statistics on top of
 
 - `RangeStats::get_approximate_size` — estimate the on-disk byte size of a key range.
 - `RangeStats::estimate_key_count` — estimate the number of keys in a range.
+- `RangeStats::get_approximate_size_with_prefix` — prefix version of `get_approximate_size`.
+- `RangeStats::estimate_key_count_with_prefix` — prefix version of `estimate_key_count`.
 
 These APIs are best effort.
 
