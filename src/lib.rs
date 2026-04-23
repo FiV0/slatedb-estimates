@@ -185,7 +185,7 @@ mod tests {
 
         let reader = SstReader::new(path, Arc::clone(&object_store), None, None);
         let manifest = db.manifest();
-        let view = manifest.l0.front().unwrap();
+        let view = manifest.l0().front().unwrap();
         let sst_file = reader.open_with_handle(view.sst.clone()).unwrap();
         let index = sst_file.index().await.unwrap();
         assert!(index.len() > 2, "test data should span multiple blocks");
@@ -272,8 +272,8 @@ mod tests {
         wait_for_compaction(&db).await;
 
         let manifest = db.manifest();
-        assert!(manifest.l0.is_empty());
-        assert!(!manifest.compacted.is_empty());
+        assert!(manifest.l0().is_empty());
+        assert!(!manifest.compacted().is_empty());
 
         let range = Bytes::from_static(b"k00")..Bytes::from_static(b"k24");
         let expected = scan_count(&db, range.clone()).await;
@@ -438,7 +438,7 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(10), async {
             loop {
                 let manifest = db.manifest();
-                if manifest.l0.is_empty() && !manifest.compacted.is_empty() {
+                if manifest.l0().is_empty() && !manifest.compacted().is_empty() {
                     return;
                 }
                 tokio::time::sleep(Duration::from_millis(10)).await;
@@ -464,16 +464,16 @@ mod tests {
     impl CompactionScheduler for CompactL0AfterTwoScheduler {
         fn propose(&self, state: &CompactorStateView) -> Vec<CompactionSpec> {
             let manifest = state.manifest();
-            if manifest.l0.len() < 2 {
+            if manifest.l0().len() < 2 {
                 return Vec::new();
             }
 
             let sources = manifest
-                .l0
+                .l0()
                 .iter()
                 .map(|view| SourceId::SstView(view.id))
                 .collect();
-            let destination = manifest.compacted.first().map_or(0, |run| run.id + 1);
+            let destination = manifest.compacted().first().map_or(0, |run| run.id + 1);
 
             vec![CompactionSpec::new(sources, destination)]
         }

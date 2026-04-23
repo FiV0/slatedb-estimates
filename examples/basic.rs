@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
+use slatedb::Db;
 use slatedb::bytes::Bytes;
 use slatedb::config::{FlushOptions, FlushType};
 use slatedb::object_store::memory::InMemory;
-use slatedb::Db;
 use slatedb_estimates::{RangeStats, SizeApproximationOptions};
 
 #[tokio::main]
@@ -33,7 +33,10 @@ async fn main() {
     };
 
     let size = range_stats
-        .get_approximate_size(Bytes::from_static(b"k05")..Bytes::from_static(b"k15"), &opts)
+        .get_approximate_size(
+            Bytes::from_static(b"k05")..Bytes::from_static(b"k15"),
+            &opts,
+        )
         .await
         .unwrap();
     println!("approximate size: {size} bytes");

@@ -4,10 +4,10 @@ use std::ops::{Bound, RangeBounds};
 use std::sync::Arc;
 
 use slatedb::bytes::Bytes;
-use slatedb::manifest::{ManifestCore, SsTableId, SsTableView};
+use slatedb::manifest::{SsTableId, SsTableView};
 use slatedb::object_store::ObjectStore;
 use slatedb::object_store::path::Path;
-use slatedb::{BlockTransformer, SstReader};
+use slatedb::{BlockTransformer, SstReader, VersionedManifest};
 
 use crate::SizeApproximationOptions;
 
@@ -68,7 +68,8 @@ impl RangeStats {
             return Ok(0);
         }
 
-        let candidates = collect_candidates(self.db.manifest(), &query);
+        let manifest = self.db.manifest();
+        let candidates = collect_candidates(&manifest, &query);
         if candidates.is_empty() {
             return Ok(0);
         }
@@ -121,7 +122,8 @@ impl RangeStats {
             return Ok(0);
         }
 
-        let candidates = collect_candidates(self.db.manifest(), &query);
+        let manifest = self.db.manifest();
+        let candidates = collect_candidates(&manifest, &query);
         if candidates.is_empty() {
             return Ok(0);
         }
@@ -224,17 +226,17 @@ fn validate_size_options(opts: &SizeApproximationOptions) -> Result<(), slatedb:
     Ok(())
 }
 
-fn collect_candidates(manifest: ManifestCore, query: &OwnedRange) -> Vec<Candidate> {
+fn collect_candidates(manifest: &VersionedManifest, query: &OwnedRange) -> Vec<Candidate> {
     let mut candidates = Vec::new();
 
-    for view in manifest.l0 {
-        if let Some(candidate) = build_candidate(view, query) {
+    for view in manifest.l0() {
+        if let Some(candidate) = build_candidate(view.clone(), query) {
             candidates.push(candidate);
         }
     }
 
-    for sorted_run in manifest.compacted {
-        for view in sorted_run.tables_covering_range(query.clone()) {
+    for sorted_run in manifest.compacted() {
+        for view in sorted_run.tables_covering_range::<OwnedRange>(query.clone()) {
             if let Some(candidate) = build_candidate(view.clone(), query) {
                 candidates.push(candidate);
             }
