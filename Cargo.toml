@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-slatedb = { git = "https://github.com/slatedb/slatedb", rev = "bc8ab181da3b47b8e1ef88d4bda2d3534964f65c", default-features = false }
+slatedb = { git = "https://github.com/FiV0/slatedb", rev = "8c95713bb307aa9d659ff7484c2a6920b09ba812", default-features = false }
 
 [dev-dependencies]
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"] }
