@@ -7,21 +7,21 @@ use slatedb::bytes::Bytes;
 use slatedb::manifest::{SsTableId, SsTableView};
 use slatedb::object_store::ObjectStore;
 use slatedb::object_store::path::Path;
-use slatedb::{BlockTransformer, SstReader, VersionedManifest};
+use slatedb::{BlockTransformer, DbMetadataOps, SstReader, VersionedManifest};
 
 use crate::SizeApproximationOptions;
 
 type OwnedRange = (Bound<Bytes>, Bound<Bytes>);
 
-pub struct RangeStats {
-    db: Arc<slatedb::Db>,
+pub struct RangeStats<D: DbMetadataOps + Send + Sync + ?Sized = slatedb::Db> {
+    db: Arc<D>,
     sst_reader: SstReader,
 }
 
-impl RangeStats {
+impl<D: DbMetadataOps + Send + Sync + ?Sized> RangeStats<D> {
     /// The `cache` argument controls index/stats block caching; the cache is not read from `db`.
     pub fn new<P: Into<Path>>(
-        db: Arc<slatedb::Db>,
+        db: Arc<D>,
         path: P,
         object_store: Arc<dyn ObjectStore>,
         cache: Option<Arc<dyn slatedb::db_cache::DbCache>>,
@@ -31,7 +31,7 @@ impl RangeStats {
         Self::from_db_parts(db, sst_reader)
     }
 
-    pub fn from_db_parts(db: Arc<slatedb::Db>, sst_reader: SstReader) -> Self {
+    pub fn from_db_parts(db: Arc<D>, sst_reader: SstReader) -> Self {
         Self { db, sst_reader }
     }
 
