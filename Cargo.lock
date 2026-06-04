@@ -798,14 +798,16 @@ dependencies = [
 
 [[package]]
 name = "object_store"
-version = "0.12.5"
+version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbfbfff40aeccab00ec8a910b57ca8ecf4319b335c542f2edcd19dd25a1e2a00"
+checksum = "622acbc9100d3c10e2ee15804b0caa40e55c933d5aa53814cd520805b7958a49"
 dependencies = [
  "async-trait",
  "bytes",
  "chrono",
- "futures",
+ "futures-channel",
+ "futures-core",
+ "futures-util",
  "http",
  "humantime",
  "itertools",
@@ -1185,8 +1187,8 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "slatedb"
-version = "0.12.0"
-source = "git+https://github.com/slatedb/slatedb?rev=e4a31506e78878e313a001e0ade760ddbda59dba#e4a31506e78878e313a001e0ade760ddbda59dba"
+version = "0.13.0"
+source = "git+https://github.com/slatedb/slatedb?branch=1597-hashmap#1ce4df5e20504644a9119ddb0e4da2bab0b43f60"
 dependencies = [
  "async-channel",
  "async-trait",
@@ -1206,7 +1208,6 @@ dependencies = [
  "log",
  "lru",
  "object_store",
- "once_cell",
  "ouroboros",
  "parking_lot",
  "rand",
@@ -1216,6 +1217,7 @@ dependencies = [
  "siphasher",
  "slatedb-common",
  "slatedb-txn-obj",
+ "smallvec",
  "sysinfo",
  "thiserror 1.0.69",
  "thread_local",
@@ -1230,8 +1232,8 @@ dependencies = [
 
 [[package]]
 name = "slatedb-common"
-version = "0.12.0"
-source = "git+https://github.com/slatedb/slatedb?rev=e4a31506e78878e313a001e0ade760ddbda59dba#e4a31506e78878e313a001e0ade760ddbda59dba"
+version = "0.13.0"
+source = "git+https://github.com/slatedb/slatedb?branch=1597-hashmap#1ce4df5e20504644a9119ddb0e4da2bab0b43f60"
 dependencies = [
  "chrono",
  "log",
@@ -1241,8 +1243,8 @@ dependencies = [
 
 [[package]]
 name = "slatedb-txn-obj"
-version = "0.12.0"
-source = "git+https://github.com/slatedb/slatedb?rev=e4a31506e78878e313a001e0ade760ddbda59dba#e4a31506e78878e313a001e0ade760ddbda59dba"
+version = "0.13.0"
+source = "git+https://github.com/slatedb/slatedb?branch=1597-hashmap#1ce4df5e20504644a9119ddb0e4da2bab0b43f60"
 dependencies = [
  "async-trait",
  "bytes",
@@ -1250,6 +1252,7 @@ dependencies = [
  "futures",
  "log",
  "object_store",
+ "parking_lot",
  "slatedb-common",
  "thiserror 1.0.69",
 ]
