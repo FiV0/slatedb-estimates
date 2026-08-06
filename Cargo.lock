@@ -1266,6 +1266,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "slatedb-estimates"
+version = "0.1.0-alpha.1"
+dependencies = [
+ "slatedb",
+ "tokio",
+]
+
+[[package]]
 name = "slatedb-txn-obj"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1280,14 +1288,6 @@ dependencies = [
  "parking_lot",
  "slatedb-common",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "slatedb_estimates"
-version = "0.1.0"
-dependencies = [
- "slatedb",
- "tokio",
 ]
 
 [[package]]

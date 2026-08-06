@@ -1,7 +1,15 @@
 [package]
-name = "slatedb_estimates"
-version = "0.1.0"
+name = "slatedb-estimates"
+version = "0.1.0-alpha.1"
 edition = "2024"
+rust-version = "1.88"
+description = "Approximate range statistics built on SlateDB metadata"
+documentation = "https://docs.rs/slatedb-estimates"
+readme = "README.md"
+repository = "https://github.com/FiV0/slatedb-estimates"
+license = "Apache-2.0"
+keywords = ["slatedb", "database", "storage", "statistics"]
+exclude = [".github/", "AGENTS.md", "CLAUDE.md"]
 
 [dependencies]
 slatedb = { version = "0.15.0", default-features = false }

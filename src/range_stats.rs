@@ -13,13 +13,20 @@ use crate::SizeApproximationOptions;
 
 type OwnedRange = (Bound<Bytes>, Bound<Bytes>);
 
+/// Computes best-effort range statistics from a SlateDB manifest and SST metadata.
+///
+/// Estimates cover on-disk SSTs only. Memtable-backed estimation is not supported (yet).
 pub struct RangeStats<D: DbMetadataOps + Send + Sync + ?Sized = slatedb::Db> {
     db: Arc<D>,
     sst_reader: SstReader,
 }
 
 impl<D: DbMetadataOps + Send + Sync + ?Sized> RangeStats<D> {
-    /// The `cache` argument controls index/stats block caching; the cache is not read from `db`.
+    /// Creates an estimator from a database and its SST storage configuration.
+    ///
+    /// `path`, `object_store`, and `block_transformer` must describe the same
+    /// storage used by `db`. `cache` controls index and statistics block caching;
+    /// it is not obtained from `db`.
     pub fn new<P: Into<Path>>(
         db: Arc<D>,
         path: P,
@@ -31,10 +38,18 @@ impl<D: DbMetadataOps + Send + Sync + ?Sized> RangeStats<D> {
         Self::from_db_parts(db, sst_reader)
     }
 
+    /// Creates an estimator from a database and a preconfigured SST reader.
     pub fn from_db_parts(db: Arc<D>, sst_reader: SstReader) -> Self {
         Self { db, sst_reader }
     }
 
+    /// Estimates the on-disk size of all keys beginning with `prefix`.
+    ///
+    /// An empty prefix covers the full keyspace.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `opts` is invalid or SlateDB metadata cannot be read.
     pub async fn get_approximate_size_with_prefix<P: AsRef<[u8]> + Send>(
         &self,
         prefix: P,
@@ -44,6 +59,14 @@ impl<D: DbMetadataOps + Send + Sync + ?Sized> RangeStats<D> {
         self.get_approximate_size::<Bytes, _>(range, opts).await
     }
 
+    /// Estimates key entries beginning with `prefix` from SST-level statistics.
+    ///
+    /// An empty prefix covers the full keyspace. The estimate has the same
+    /// storage-level limitations as [`Self::estimate_key_count`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when SlateDB SST metadata cannot be read.
     pub async fn estimate_key_count_with_prefix<P: AsRef<[u8]> + Send>(
         &self,
         prefix: P,
@@ -52,6 +75,15 @@ impl<D: DbMetadataOps + Send + Sync + ?Sized> RangeStats<D> {
         self.estimate_key_count::<Bytes, _>(range).await
     }
 
+    /// Estimates the on-disk byte size of `range` from SST-level metadata.
+    ///
+    /// Fully covered SSTs use their whole-file estimates. Partial SSTs are
+    /// refined using block offsets unless `opts.error_margin` permits their
+    /// coarse estimate to be used.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when `opts` is invalid or SlateDB metadata cannot be read.
     pub async fn get_approximate_size<K, T>(
         &self,
         range: T,
@@ -112,6 +144,10 @@ impl<D: DbMetadataOps + Send + Sync + ?Sized> RangeStats<D> {
     /// reconcile overlapping L0 files the way a SlateDB scan does. A range that
     /// covers un-compacted updates or tombstones can count obsolete versions or
     /// deleted keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when SlateDB SST metadata cannot be read.
     pub async fn estimate_key_count<K, T>(&self, range: T) -> Result<u64, slatedb::Error>
     where
         K: AsRef<[u8]> + Send,

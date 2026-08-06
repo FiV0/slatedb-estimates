@@ -1,7 +1,7 @@
 ### SlateDB estimates
 
 > 🚧 **WARNING: Alpha Software** 🚧
-> This is very much WIP for the range metadata API usage described in [SlateDB's range metdata RFC](https://github.com/slatedb/slatedb/blob/main/rfcs/0020-range-metadata.md)
+> This is very much WIP for the range metadata API usage described in [SlateDB's range metadata RFC](https://github.com/slatedb/slatedb/blob/main/rfcs/0020-range-metadata.md).
 
 A small Rust library that builds approximate range statistics on top of
 [SlateDB](https://github.com/slatedb/slatedb) metadata APIs.
@@ -19,17 +19,20 @@ These APIs are best effort.
 
 ```toml
 [dependencies]
-slatedb_estimates = { git = "https://github.com/FiV0/slatedb-estimates" }
+slatedb-estimates = "0.1.0-alpha.1"
+slatedb = { version = "0.15.0", default-features = false }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 
 #### Example
 
 ```rust
 use std::sync::Arc;
+
+use slatedb::Db;
 use slatedb::bytes::Bytes;
 use slatedb::config::{FlushOptions, FlushType};
 use slatedb::object_store::memory::InMemory;
-use slatedb::Db;
 use slatedb_estimates::{RangeStats, SizeApproximationOptions};
 
 #[tokio::main]

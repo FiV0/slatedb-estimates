@@ -4,10 +4,24 @@ mod range_stats;
 
 pub use crate::range_stats::RangeStats;
 
+/// Controls which storage sources and refinement strategy are used for size estimates.
 #[derive(Debug, Clone)]
 pub struct SizeApproximationOptions {
+    /// Whether to include mutable and immutable memtables.
+    ///
+    /// Memtable estimation is currently unsupported, so setting this to `true`
+    /// causes size estimation to return an invalid-argument error.
     pub include_memtables: bool,
+    /// Whether to include on-disk SST files.
+    ///
+    /// This must currently be `true` because memtable estimation is unsupported.
     pub include_files: bool,
+    /// Maximum tolerated coarse-estimate contribution before refining a partial SST.
+    ///
+    /// Values must be finite and in `0.0..=1.0`. A partial SST whose coarse
+    /// contribution is smaller than this fraction of the total coarse estimate
+    /// may be counted without block-level refinement. Use `0.0` to refine every
+    /// partial SST.
     pub error_margin: f64,
 }
 
