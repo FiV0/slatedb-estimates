@@ -33,7 +33,7 @@ mod tests {
     };
     use slatedb::config::{CompactorOptions, FlushOptions, FlushType, Settings, SstBlockSize};
     use slatedb::object_store::memory::InMemory;
-    use slatedb::{Db, ErrorKind, SstReader};
+    use slatedb::{ByteRangeBounds, Db, ErrorKind, SstReader};
 
     use super::{RangeStats, SizeApproximationOptions};
 
@@ -481,7 +481,7 @@ mod tests {
 
     async fn scan_count<T>(db: &Db, range: T) -> u64
     where
-        T: std::ops::RangeBounds<Bytes> + Send,
+        T: ByteRangeBounds + Send,
     {
         let mut iter = db.scan(range).await.unwrap();
         let mut count = 0u64;
