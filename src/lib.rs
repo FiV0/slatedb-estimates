@@ -402,7 +402,7 @@ mod tests {
             }
         }
 
-        if chunk == 0 || key_count % chunk != 0 {
+        if chunk == 0 || !key_count.is_multiple_of(chunk) {
             flush_memtable(&db).await;
         }
 
