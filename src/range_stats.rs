@@ -183,7 +183,7 @@ impl<D: DbMetadataOps + Send + Sync + ?Sized> RangeStats<D> {
                 continue;
             }
 
-            let index = sst_file.index_view().await?;
+            let index = sst_file.index().await?;
             if index.is_empty() || stats.block_stats.is_empty() {
                 continue;
             }
@@ -214,7 +214,7 @@ impl<D: DbMetadataOps + Send + Sync + ?Sized> RangeStats<D> {
         overlap: &OwnedRange,
     ) -> Result<u64, slatedb::Error> {
         let sst_file = self.sst_reader.open_with_handle(view.sst.clone())?;
-        let index = sst_file.index_view().await?;
+        let index = sst_file.index().await?;
         if index.is_empty() {
             return Ok(view.estimate_size());
         }
