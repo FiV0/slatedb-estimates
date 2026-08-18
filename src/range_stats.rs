@@ -7,7 +7,7 @@ use slatedb::bytes::Bytes;
 use slatedb::manifest::{SsTableId, SsTableView};
 use slatedb::object_store::ObjectStore;
 use slatedb::object_store::path::Path;
-use slatedb::{BlockTransformer, DbMetadataOps, SstReader, VersionedManifest};
+use slatedb::{BlockTransformer, DbMetadataOps, SstIndex, SstReader, VersionedManifest};
 
 use crate::SizeApproximationOptions;
 
@@ -224,9 +224,15 @@ impl<D: DbMetadataOps + Send + Sync + ?Sized> RangeStats<D> {
         };
 
         let total_size = view.estimate_size();
-        let start_offset = index[start_idx].0;
+        let start_offset = index
+            .get(start_idx)
+            .expect("touched block start should be in range")
+            .0;
         let end_offset = if end_idx + 1 < index.len() {
-            index[end_idx + 1].0
+            index
+                .get(end_idx + 1)
+                .expect("block after touched span should be in range")
+                .0
         } else {
             total_size
         };
@@ -310,7 +316,7 @@ fn logical_view_range(view: &SsTableView) -> Option<OwnedRange> {
     }
 }
 
-fn touched_block_span(index: &[(u64, Bytes)], range: &OwnedRange) -> Option<(usize, usize)> {
+fn touched_block_span(index: &SstIndex, range: &OwnedRange) -> Option<(usize, usize)> {
     if index.is_empty() {
         return None;
     }
@@ -323,25 +329,25 @@ fn touched_block_span(index: &[(u64, Bytes)], range: &OwnedRange) -> Option<(usi
     Some((start_idx, end_idx.min(index.len() - 1)))
 }
 
-fn start_block_index(index: &[(u64, Bytes)], start: &Bound<Bytes>) -> usize {
+fn start_block_index(index: &SstIndex, start: &Bound<Bytes>) -> usize {
     match start {
         Unbounded => 0,
         Included(key) | Excluded(key) => {
-            let idx = index.partition_point(|(_, candidate)| candidate <= key);
+            let idx = index.partition_point(|candidate| candidate <= key.as_ref());
             idx.saturating_sub(1)
         }
     }
 }
 
-fn end_block_index(index: &[(u64, Bytes)], end: &Bound<Bytes>) -> Option<usize> {
+fn end_block_index(index: &SstIndex, end: &Bound<Bytes>) -> Option<usize> {
     match end {
         Unbounded => Some(index.len().saturating_sub(1)),
         Included(key) => {
-            let idx = index.partition_point(|(_, candidate)| candidate <= key);
+            let idx = index.partition_point(|candidate| candidate <= key.as_ref());
             idx.checked_sub(1)
         }
         Excluded(key) => {
-            let idx = index.partition_point(|(_, candidate)| candidate < key);
+            let idx = index.partition_point(|candidate| candidate < key.as_ref());
             idx.checked_sub(1)
         }
     }

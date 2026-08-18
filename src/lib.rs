@@ -204,8 +204,8 @@ mod tests {
         let index = sst_file.index().await.unwrap();
         assert!(index.len() > 2, "test data should span multiple blocks");
 
-        let start = index[1].1.clone();
-        let end = index[2].1.clone();
+        let start = Bytes::copy_from_slice(index.get(1).unwrap().1);
+        let end = Bytes::copy_from_slice(index.get(2).unwrap().1);
 
         let expected = scan_count(&db, start.clone()..end.clone()).await;
         let range_stats = RangeStats::new(Arc::new(db), path, object_store, None, None);

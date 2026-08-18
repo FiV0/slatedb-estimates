@@ -12,7 +12,7 @@ keywords = ["slatedb", "database", "storage", "statistics"]
 exclude = [".github/", "AGENTS.md", "CLAUDE.md"]
 
 [dependencies]
-slatedb = { version = "0.15.0", default-features = false }
+slatedb = { git = "https://github.com/slatedb/slatedb", rev = "8aa2c10eb9ff3db3519f75f75d10e5487df29805", default-features = false }
 
 [dev-dependencies]
 tokio = { version = "1.47.1", features = ["macros", "rt-multi-thread"] }
