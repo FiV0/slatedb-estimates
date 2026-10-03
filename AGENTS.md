@@ -10,7 +10,7 @@ statistics on top of SlateDB metadata APIs.
 ## Tech Stack
 
 - Rust library crate
-- SlateDB pinned to `v0.15.0` in `Cargo.toml`
+- SlateDB pinned to `v0.17.0` in `Cargo.toml`
 
 ## Working Agreement
 
