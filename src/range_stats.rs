@@ -4,7 +4,7 @@ use std::ops::{Bound, RangeBounds};
 use std::sync::Arc;
 
 use slatedb::bytes::Bytes;
-use slatedb::manifest::{SsTableId, SsTableView};
+use slatedb::manifest::SsTableView;
 use slatedb::object_store::ObjectStore;
 use slatedb::object_store::path::Path;
 use slatedb::{BlockTransformer, DbMetadataOps, SstIndex, SstReader, VersionedManifest};
@@ -358,10 +358,7 @@ fn net_count(puts: u64, deletes: u64, merges: u64) -> u64 {
 }
 
 fn format_sst_id(view: &SsTableView) -> String {
-    match view.sst.id {
-        SsTableId::Compacted(id) => format!("compacted-{id}"),
-        SsTableId::Wal(id) => format!("wal-{id}"),
-    }
+    format!("compacted-{}", view.sst.id.value())
 }
 
 fn missing_sst_stats_error(view: &SsTableView) -> slatedb::Error {
