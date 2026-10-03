@@ -19,7 +19,7 @@ These APIs are best effort.
 
 ```toml
 [dependencies]
-slatedb-estimates = "0.1.0-alpha.1"
+slatedb-estimates = "0.1.0-alpha.2"
 slatedb = { version = "0.17.0", default-features = false }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
